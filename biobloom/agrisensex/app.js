@@ -1,3 +1,178 @@
+// Constants and Configuration
+const CONFIG = {
+    mapDefaults: {
+        center: [20.5937, 78.9629],
+        zoom: 5
+    },
+    cropTypes: {
+        wheat: { baseScore: 75, waterReq: 'medium' },
+        rice: { baseScore: 65, waterReq: 'high' },
+        corn: { baseScore: 70, waterReq: 'medium' },
+        soybean: { baseScore: 85, waterReq: 'low' },
+        cotton: { baseScore: 60, waterReq: 'high' }
+    },
+    soilTypes: {
+        clay: { drainageRate: 'slow', nutrientRetention: 'high' },
+        loam: { drainageRate: 'moderate', nutrientRetention: 'high' },
+        sandy: { drainageRate: 'fast', nutrientRetention: 'low' },
+        silt: { drainageRate: 'moderate', nutrientRetention: 'medium' }
+    }
+};
+
+// Utility Functions
+const utils = {
+    calculateScore: (metrics) => {
+        return Object.values(metrics).reduce((sum, val) => sum + val, 0) / 4;
+    },
+    
+    formatPercentage: (value) => {
+        return `${Math.round(value)}%`;
+    },
+    
+    getScoreLabel: (score) => {
+        if (score >= 90) return 'EXCELLENT';
+        if (score >= 75) return 'GOOD';
+        if (score >= 60) return 'FAIR';
+        if (score >= 40) return 'POOR';
+        return 'CRITICAL';
+    }
+};
+
+// Core Functionality Classes
+class SustainabilityCalculator {
+    constructor() {
+        this.metrics = {
+            soilHealth: 0,
+            carbonImpact: 0,
+            waterEfficiency: 0,
+            biodiversity: 0
+        };
+    }
+
+    calculateMetrics(cropType, soilType, phLevel) {
+        const baseMetrics = CONFIG.cropTypes[cropType];
+        const soilModifiers = CONFIG.soilTypes[soilType];
+        const phModifier = this.calculatePhModifier(phLevel);
+
+        this.metrics = {
+            soilHealth: this.calculateSoilHealth(baseMetrics, soilModifiers, phModifier),
+            carbonImpact: this.calculateCarbonImpact(baseMetrics, soilModifiers, phModifier),
+            waterEfficiency: this.calculateWaterEfficiency(baseMetrics, soilModifiers, phModifier),
+            biodiversity: this.calculateBiodiversity(baseMetrics, soilModifiers, phModifier)
+        };
+
+        return this.metrics;
+    }
+
+    calculatePhModifier(phLevel) {
+        const optimal = phLevel >= 6.0 && phLevel <= 7.5;
+        return optimal ? 1.2 : (phLevel < 6.0 ? 0.8 : 0.9);
+    }
+
+    // Individual metric calculations
+    calculateSoilHealth(base, soil, phMod) {
+        return Math.min(100, Math.round(base.baseScore * (soil.nutrientRetention === 'high' ? 1.2 : 1.0) * phMod));
+    }
+
+    calculateCarbonImpact(base, soil, phMod) {
+        return Math.min(100, Math.round(base.baseScore * (soil.drainageRate === 'moderate' ? 1.1 : 0.9) * phMod));
+    }
+
+    calculateWaterEfficiency(base, soil, phMod) {
+        const waterMod = base.waterReq === 'low' ? 1.2 : (base.waterReq === 'high' ? 0.8 : 1.0);
+        return Math.min(100, Math.round(base.baseScore * waterMod * phMod));
+    }
+
+    calculateBiodiversity(base, soil, phMod) {
+        return Math.min(100, Math.round(base.baseScore * (soil.nutrientRetention === 'high' ? 1.2 : 1.0) * phMod));
+    }
+}
+
+// UI Controller Class
+class UIController {
+    constructor() {
+        this.calculator = new SustainabilityCalculator();
+        this.initializeEventListeners();
+    }
+
+    initializeEventListeners() {
+        const form = document.getElementById('bioengineering-form');
+        if (form) {
+            form.addEventListener('submit', (e) => this.handleFormSubmit(e));
+        }
+
+        const phInput = document.getElementById('ph-level');
+        if (phInput) {
+            phInput.addEventListener('input', (e) => this.updatePhDisplay(e.target.value));
+        }
+    }
+
+    handleFormSubmit(e) {
+        e.preventDefault();
+        const cropType = document.getElementById('crop-type').value;
+        const soilType = document.getElementById('soil-type').value;
+        const phLevel = parseFloat(document.getElementById('ph-level').value);
+
+        const metrics = this.calculator.calculateMetrics(cropType, soilType, phLevel);
+        this.updateDisplay(metrics);
+    }
+
+    updateDisplay(metrics) {
+        const score = utils.calculateScore(metrics);
+        this.updateScoreCircle(score);
+        this.updateMetrics(metrics);
+        this.updateAQIImpact(metrics);
+    }
+
+    updateScoreCircle(score) {
+        const circle = document.querySelector('.score-progress');
+        const radius = circle.r.baseVal.value;
+        const circumference = 2 * Math.PI * radius;
+        
+        // Set the initial state
+        circle.style.strokeDasharray = `${circumference} ${circumference}`;
+        circle.style.strokeDashoffset = circumference;
+        
+        // Calculate the offset based on the score (0-100)
+        const offset = circumference - (score / 100) * circumference;
+        circle.style.strokeDashoffset = offset;
+        
+        // Update the score value display
+        document.querySelector('.score-value').textContent = `${Math.round(score)}%`;
+    }
+
+    updateMetrics(metrics) {
+        Object.entries(metrics).forEach(([key, value]) => {
+            const metric = document.querySelector(`.metric-label:contains('${key}')`);
+            if (metric) {
+                const valueElement = metric.closest('.metric').querySelector('.metric-value');
+                const fillElement = metric.closest('.metric').querySelector('.metric-fill');
+                if (valueElement && fillElement) {
+                    valueElement.textContent = utils.formatPercentage(value);
+                    fillElement.style.width = utils.formatPercentage(value);
+                }
+            }
+        });
+    }
+
+    updatePhDisplay(value) {
+        const display = document.querySelector('.ph-value');
+        if (display) {
+            display.textContent = parseFloat(value).toFixed(1);
+        }
+    }
+
+    updateAQIImpact(metrics) {
+        // Implementation for AQI impact chart update
+        // This would use Chart.js or similar library
+    }
+}
+
+// Initialize Application
+document.addEventListener('DOMContentLoaded', () => {
+    new UIController();
+});
+
 // Utility functions
 function showToast(message, type = 'success') {
     const toast = document.createElement('div');
@@ -824,21 +999,28 @@ async function fetchWeatherData() {
 
         const currentWeatherHTML = `
             <div class="current-weather">
-                <div class="current-temp">
-                    <i class="fas ${currentIcon}"></i>
-                    <span>${currentTemp}°C</span>
+                <div class="current-weather-main">
+                    <div class="current-temp">
+                        <i class="fas ${currentIcon}"></i>
+                        <span>${currentTemp}°C</span>
+                    </div>
                 </div>
                 <div class="current-details">
-                    <p>Feels like: ${feelsLike}°C</p>
-                    <p>Humidity: ${humidity}%</p>
-                    <p>Wind: ${windSpeed} km/h</p>
-                    <p>Air Quality: ${getAQILevel(aqi)}</p>
+                    <p><i class="fas fa-thermometer-half"></i>Feels like: ${feelsLike}°C</p>
+                    <p><i class="fas fa-tint"></i>Humidity: ${humidity}%</p>
+                    <p><i class="fas fa-wind"></i>Wind: ${windSpeed} km/h</p>
+                    <p>
+                        <i class="fas fa-cloud"></i>
+                        Air Quality: <span class="air-quality-status ${getAQILevel(aqi).toLowerCase()}">${getAQILevel(aqi)}</span>
+                    </p>
                 </div>
             </div>
         `;
 
         const weatherData = document.getElementById('weather-data');
-        weatherData.insertAdjacentHTML('afterbegin', currentWeatherHTML);
+        if (weatherData) {
+            weatherData.innerHTML = currentWeatherHTML + weatherData.innerHTML;
+        }
 
     } catch (error) {
         console.error('Error fetching weather data:', error);
@@ -877,7 +1059,7 @@ function initializeBioengineering() {
     // Add bioengineering form
     bioContainer.innerHTML = `
         <div class="bioengineering-form">
-            <h3>AI Microbial Mix Calculator</h3>
+            <h3>AI Soil Health Predictor</h3>
             <form id="bioengineering-form">
                 <div class="form-group">
                     <label for="crop-type">Crop Type</label>
@@ -914,8 +1096,14 @@ function initializeBioengineering() {
                 <div class="score-container">
                     <div class="score-circle">
                         <svg class="score-svg">
-                            <circle class="score-background" cx="60" cy="60" r="54"></circle>
-                            <circle class="score-progress" cx="60" cy="60" r="54"></circle>
+                            <defs>
+                                <linearGradient id="scoreGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                    <stop offset="0%" style="stop-color:#2ecc71"/>
+                                    <stop offset="100%" style="stop-color:#3498db"/>
+                                </linearGradient>
+                            </defs>
+                            <circle class="score-background" cx="100" cy="100" r="90"></circle>
+                            <circle class="score-progress" cx="100" cy="100" r="90"></circle>
                         </svg>
                         <div class="score-content">
                             <span class="score-value">0</span>
@@ -1116,4 +1304,86 @@ function initializeRealTimeUpdates() {
     return () => {
         stopUpdates();
     };
+}
+
+// Add these functions after the initializeBioengineering function
+function calculateSustainabilityMetrics(cropType, soilType, phLevel) {
+    // Base metrics for different crops
+    const cropMetrics = {
+        wheat: { soilHealth: 75, carbonImpact: 65, waterEfficiency: 70, biodiversity: 60 },
+        rice: { soilHealth: 65, carbonImpact: 55, waterEfficiency: 80, biodiversity: 70 },
+        corn: { soilHealth: 70, carbonImpact: 60, waterEfficiency: 65, biodiversity: 65 },
+        soybean: { soilHealth: 85, carbonImpact: 75, waterEfficiency: 60, biodiversity: 80 },
+        cotton: { soilHealth: 60, carbonImpact: 50, waterEfficiency: 55, biodiversity: 55 }
+    };
+
+    // Soil type modifiers
+    const soilModifiers = {
+        clay: { soilHealth: 1.1, carbonImpact: 0.9, waterEfficiency: 1.2, biodiversity: 0.9 },
+        loam: { soilHealth: 1.2, carbonImpact: 1.1, waterEfficiency: 1.1, biodiversity: 1.2 },
+        sandy: { soilHealth: 0.9, carbonImpact: 1.0, waterEfficiency: 0.8, biodiversity: 0.9 },
+        silt: { soilHealth: 1.0, carbonImpact: 1.0, waterEfficiency: 1.0, biodiversity: 1.0 }
+    };
+
+    // pH level impact (optimal range: 6.0-7.5)
+    const phOptimal = phLevel >= 6.0 && phLevel <= 7.5;
+    const phModifier = phOptimal ? 1.2 : (phLevel < 6.0 ? 0.8 : 0.9);
+
+    // Calculate final metrics
+    const baseMetrics = cropMetrics[cropType];
+    const modifiers = soilModifiers[soilType];
+
+    return {
+        soilHealth: Math.min(100, Math.round(baseMetrics.soilHealth * modifiers.soilHealth * phModifier)),
+        carbonImpact: Math.min(100, Math.round(baseMetrics.carbonImpact * modifiers.carbonImpact * phModifier)),
+        waterEfficiency: Math.min(100, Math.round(baseMetrics.waterEfficiency * modifiers.waterEfficiency * phModifier)),
+        biodiversity: Math.min(100, Math.round(baseMetrics.biodiversity * modifiers.biodiversity * phModifier))
+    };
+}
+
+function updateSustainabilityDisplay(metrics) {
+    // Update score circle
+    const scoreValue = Math.round((metrics.soilHealth + metrics.carbonImpact + metrics.waterEfficiency + metrics.biodiversity) / 4);
+    const scoreElement = document.querySelector('.score-value');
+    const scoreLabel = document.querySelector('.score-label');
+    const scoreProgress = document.querySelector('.score-progress');
+    
+    if (scoreElement) scoreElement.textContent = scoreValue;
+    if (scoreLabel) scoreLabel.textContent = getScoreLabel(scoreValue);
+    if (scoreProgress) {
+        const circumference = 2 * Math.PI * 90;
+        const offset = circumference - (scoreValue / 100) * circumference;
+        scoreProgress.style.strokeDasharray = `${circumference} ${circumference}`;
+        scoreProgress.style.strokeDashoffset = offset;
+    }
+
+    // Update individual metrics
+    updateMetric('Soil Health', metrics.soilHealth);
+    updateMetric('Carbon Impact', metrics.carbonImpact);
+    updateMetric('Water Efficiency', metrics.waterEfficiency);
+    updateMetric('Biodiversity', metrics.biodiversity);
+}
+
+function updateMetric(label, value) {
+    const metricElements = document.querySelectorAll('.metric');
+    for (const element of metricElements) {
+        const metricLabel = element.querySelector('.metric-label');
+        if (metricLabel && metricLabel.textContent.includes(label)) {
+            element.querySelector('.metric-value').textContent = `${value}%`;
+            element.querySelector('.metric-fill').style.width = `${value}%`;
+            break;
+        }
+    }
+}
+
+function getScoreLabel(score) {
+    if (score >= 90) return 'Excellent';
+    if (score >= 75) return 'Very Good';
+    if (score >= 60) return 'Good';
+    if (score >= 40) return 'Fair';
+    return 'Poor';
+}
+
+function updateAQIProjection(chart) {
+    // Implementation of updateAQIProjection function
 } 
